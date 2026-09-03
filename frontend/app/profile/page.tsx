@@ -8,6 +8,7 @@ import {
 import {
   BriefcaseBusiness,
   ExternalLink,
+  FolderKanban,
   GraduationCap,
   Mail,
   Pencil,
@@ -70,6 +71,12 @@ type TeamProject = {
   role: string | null;
 };
 
+type OwnedProject = {
+  id: number;
+  title: string;
+  status: string;
+};
+
 export default function ProfilePage() {
   const [user, setUser] =
     useState<User | null>(null);
@@ -79,6 +86,9 @@ export default function ProfilePage() {
 
   const [teamProjects, setTeamProjects] =
     useState<TeamProject[]>([]);
+
+  const [ownedProjects, setOwnedProjects] =
+    useState<OwnedProject[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -127,6 +137,7 @@ export default function ProfilePage() {
         const [
           profileResponse,
           applicationsResponse,
+          ownedProjectsResponse,
         ] = await Promise.all([
           fetch(
             `${API_URL}/users/${currentUser.id}/profile`,
@@ -141,7 +152,21 @@ export default function ProfilePage() {
               headers: getAuthHeaders(),
             }
           ),
+
+          fetch(
+            `${API_URL}/projects?owner_id=${currentUser.id}&limit=100`,
+            {
+              headers: getAuthHeaders(),
+            }
+          ),
         ]);
+
+        if (ownedProjectsResponse.ok) {
+          const owned: OwnedProject[] =
+            await ownedProjectsResponse.json();
+
+          setOwnedProjects(owned);
+        }
 
         if (
           profileResponse.status === 404
@@ -518,6 +543,71 @@ export default function ProfilePage() {
                           : "Your profile is hidden from TUP Community."}
                       </p>
                     </div>
+                  </section>
+
+                  <section className="mt-8 rounded-xl border border-border bg-card p-6 shadow-sm md:p-8">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
+                        <FolderKanban className="h-5 w-5 text-secondary-foreground" />
+                      </div>
+
+                      <div>
+                        <h2 className="text-xl font-semibold text-foreground">
+                          My Projects
+                        </h2>
+
+                        <p className="text-sm text-muted-foreground">
+                          Projects you have created and own.
+                        </p>
+                      </div>
+                    </div>
+
+                    {ownedProjects.length === 0 ? (
+                      <div className="mt-6 rounded-lg bg-background p-6 text-center">
+                        <p className="text-muted-foreground">
+                          You have not created a
+                          project yet.
+                        </p>
+
+                        <Link
+                          href="/projects/create"
+                          className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
+                        >
+                          Create Project
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                        {ownedProjects.map(
+                          (ownedProject) => (
+                            <article
+                              key={ownedProject.id}
+                              className="rounded-lg border border-border bg-background p-5"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <Link
+                                  href={`/projects/${ownedProject.id}`}
+                                  className="font-semibold text-foreground hover:text-primary"
+                                >
+                                  {ownedProject.title}
+                                </Link>
+
+                                <span className="rounded-full bg-secondary px-2 py-1 text-xs capitalize text-secondary-foreground">
+                                  {ownedProject.status}
+                                </span>
+                              </div>
+
+                              <Link
+                                href={`/projects/${ownedProject.id}`}
+                                className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
+                              >
+                                View Project
+                              </Link>
+                            </article>
+                          )
+                        )}
+                      </div>
+                    )}
                   </section>
 
                   <section className="mt-8 rounded-xl border border-border bg-card p-6 shadow-sm md:p-8">

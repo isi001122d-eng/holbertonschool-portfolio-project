@@ -59,6 +59,7 @@ def list_projects(
         default=None, alias="status", pattern=schemas.PROJECT_STATUS_PATTERN
     ),
     skill_id: int | None = Query(default=None, description="Bu bacarığı tələb edən layihələr"),
+    owner_id: int | None = Query(default=None, description="Bu istifadəçinin sahib olduğu layihələr"),
     limit: int = Query(default=20, ge=1, le=100, description="Bir səhifədə neçə layihə"),
     offset: int = Query(default=0, ge=0, description="Neçə layihə buraxılsın"),
 ):
@@ -69,6 +70,8 @@ def list_projects(
         q = q.filter(models.Project.status == status_filter)
     if skill_id:
         q = q.filter(models.Project.required_skills.any(models.Skill.id == skill_id))
+    if owner_id:
+        q = q.filter(models.Project.owner_id == owner_id)
 
     # Frontend "neçə səhifə var" hesablaya bilsin deyə ümumi sayı header-də veririk
     response.headers["X-Total-Count"] = str(q.count())

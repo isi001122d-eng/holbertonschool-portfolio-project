@@ -65,7 +65,7 @@ export default function MyProjectsPage() {
         const user: User = JSON.parse(savedUser);
 
         const response = await fetch(
-          `${API_URL}/projects`,
+          `${API_URL}/projects?owner_id=${user.id}&limit=100`,
           {
             headers: getAuthHeaders(),
           }
@@ -87,11 +87,7 @@ export default function MyProjectsPage() {
         const data: Project[] =
           await response.json();
 
-        const myProjects = data.filter(
-          (project) => project.owner_id === user.id
-        );
-
-        setProjects(myProjects);
+        setProjects(data);
       } catch (error) {
         setError(
           error instanceof Error
