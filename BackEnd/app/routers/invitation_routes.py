@@ -10,6 +10,8 @@ Axın:
 Qeyd: Application (Team Matching) əks istiqamətdədir — orada istifadəçi
 layihəyə müraciət edir. Burada isə layihə sahibi istifadəçini dəvət edir.
 """
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -23,7 +25,9 @@ router = APIRouter(tags=["Invitations"])
 
 def _get_project_or_404(project_id: int, db: Session) -> models.Project:
     project = (
-        db.query(models.Project).filter(models.Project.id == project_id).first()
+        db.query(models.Project)
+        .filter(models.Project.id == project_id, models.Project.is_deleted.is_(False))
+        .first()
     )
     if not project:
         raise HTTPException(
@@ -54,6 +58,12 @@ def invite_user_to_project(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Bu layihə artıq yeni üzv və ya dəvət qəbul etmir",
+        )
+
+    if project.application_deadline is not None and project.application_deadline < date.today():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu layihənin müraciət qəbulu tarixi bitib",
         )
 
     invited_user = (
@@ -88,6 +98,30 @@ def invite_user_to_project(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Bu istifadəçi artıq bu layihənin komanda üzvüdür",
         )
+
+    # DB-də (project_id, invited_user_id) üzrə unique constraint var, ona görə
+    # rədd edilmiş köhnə dəvət varsa YENİ sətir əlavə etmək əvəzinə onu
+    # "pending"ə qaytarırıq — əks halda IntegrityError alınardı.
+    existing_invitation = (
+        db.query(models.Invitation)
+        .filter(
+            models.Invitation.project_id == project_id,
+            models.Invitation.invited_user_id == payload.invited_user_id,
+        )
+        .first()
+    )
+    if existing_invitation is not None:
+        if existing_invitation.status == "pending":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Bu istifadəçi artıq bu layihəyə dəvət olunub",
+            )
+        existing_invitation.status = "pending"
+        existing_invitation.role = payload.role
+        existing_invitation.message = payload.message
+        db.commit()
+        db.refresh(existing_invitation)
+        return existing_invitation
 
     invitation = models.Invitation(
         project_id=project_id,

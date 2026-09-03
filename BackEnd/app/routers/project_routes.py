@@ -7,8 +7,6 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import (
     get_current_user,
-    get_current_user_optional,
-    resolve_actor_id,
     require_ownership,
 )
 from app import models, schemas
@@ -18,7 +16,9 @@ router = APIRouter(prefix="/projects", tags=["Projects"])
 
 def _get_project_or_404(project_id: int, db: Session) -> models.Project:
     project = (
-        db.query(models.Project).filter(models.Project.id == project_id).first()
+        db.query(models.Project)
+        .filter(models.Project.id == project_id, models.Project.is_deleted.is_(False))
+        .first()
     )
     if not project:
         raise HTTPException(
@@ -62,7 +62,7 @@ def list_projects(
     limit: int = Query(default=20, ge=1, le=100, description="Bir səhifədə neçə layihə"),
     offset: int = Query(default=0, ge=0, description="Neçə layihə buraxılsın"),
 ):
-    q = db.query(models.Project)
+    q = db.query(models.Project).filter(models.Project.is_deleted.is_(False))
     if search:
         q = q.filter(models.Project.title.ilike(f"%{search}%"))
     if status_filter:
@@ -99,16 +99,8 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
 def create_project(
     payload: schemas.ProjectCreate,
     db: Session = Depends(get_db),
-    token_user: models.User | None = Depends(get_current_user_optional),
+    token_user: models.User = Depends(get_current_user),
 ):
-    owner_id = resolve_actor_id(token_user, payload.owner_id)
-
-    owner = db.query(models.User).filter(models.User.id == owner_id).first()
-    if not owner:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="owner_id-yə uyğun istifadəçi tapılmadı",
-        )
     skills = _get_skills_or_400(payload.required_skill_ids, db)
 
     project = models.Project(
@@ -116,7 +108,7 @@ def create_project(
         description=payload.description,
         open_positions=payload.open_positions,
         application_deadline=payload.application_deadline,
-        owner_id=owner_id,
+        owner_id=token_user.id,
         required_skills=skills,
     )
     db.add(project)
@@ -170,6 +162,6 @@ def delete_project(
         token_user.id, project.owner_id,
         "Yalnız layihə sahibi bu layihəni silə bilər",
     )
-    db.delete(project)
+    project.is_deleted = True
     db.commit()
     return None

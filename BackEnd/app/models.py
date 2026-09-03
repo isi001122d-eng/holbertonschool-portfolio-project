@@ -13,7 +13,7 @@ Qeyd — TeamMember üçün ayrıca cədvəl açılmayıb: Application.status ==
 olan sətirlər həmin layihənin komanda üzvləri kimi oxunur. Bu, eyni məlumatı
 iki yerdə saxlamaqdan (data duplication) qaçmaq üçündür.
 """
-from datetime import datetime, date
+from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
@@ -123,17 +123,15 @@ class Project(Base):
     status = Column(String, nullable=False, default="open")  # open | closed
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Layihə silinəndə komanda üzvlərinin təcrübə tarixçəsi (Application
+    # sətirləri) itməsin deyə HARD DELETE əvəzinə soft-delete istifadə olunur —
+    # sətir bazada qalır, sadəcə siyahılardan/detallardan gizlədilir.
+    is_deleted = Column(Boolean, nullable=False, default=False)
 
     owner = relationship("User", back_populates="projects")
     required_skills = relationship("Skill", secondary=project_skills)
-    applications = relationship(
-        "Application", back_populates="project",
-        cascade="all, delete-orphan"
-    )
-    invitations = relationship(
-        "Invitation", back_populates="project",
-        cascade="all, delete-orphan"
-    )
+    applications = relationship("Application", back_populates="project")
+    invitations = relationship("Invitation", back_populates="project")
 
 
 class Application(Base):
