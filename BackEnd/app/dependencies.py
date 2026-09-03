@@ -1,23 +1,14 @@
 """
 Ortaq FastAPI dependency-ləri — "bu sorğunu kim edir" məsələsi.
 
-KEÇİD DÖVRÜ (Sprint 3):
-Bu sprintdə JWT əlavə olundu, amma frontend hələ tədricən keçir. Ona görə
-backend HƏR İKİ üsulu qəbul edir:
-
-  1. YENİ (tövsiyə olunan): Authorization: Bearer <token> header-i
-  2. KÖHNƏ (deprecated): request body-də `owner_id` / `applicant_id`
-
-Token varsa HƏMİŞƏ o üstün tutulur — yəni kimsə tokenlə daxil olub, body-də
-başqasnn id-sini yazsa, tokendəki istifadəçi qəbul edilir (təhlükəsizlik
-üçün vacibdir).
-
-Frontend tam JWT-yə keçəndən sonra 2-ci üsul silinməlidir və o zaman
-`owner_id`/`applicant_id` sahələri sxemlərdən çxaracaq.
+Sprint 4 qeydi: köhnə "keçid dövrü" (tokensiz, body-dəki `owner_id`/
+`applicant_id`-ə etibar etmə) məntiqi bağlanıb — token həmişə tələb olunur.
+Bu sahələr sxemlərdə hələ görünə bilər (deprecated), amma backend onları
+artıq heç vaxt oxumur.
 """
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -75,28 +66,6 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
-
-
-def resolve_actor_id(
-    token_user: Optional[models.User],
-    body_user_id: Optional[int],
-) -> int:
-    """
-    Sorğunu edən istifadəçinin id-sini müəyyən edir.
-
-    Token varsa — ondan (etibarlr).
-    Token yoxdursa — body-dəki id-dən (keçid dövrü, etibarl deyil).
-    Heç biri yoxdursa — 401.
-    """
-    if token_user is not None:
-        return token_user.id
-    if body_user_id is not None:
-        return body_user_id
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Bu əməliyyat üçün daxil olmalısınız",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
 
 
 def require_ownership(actor_id: int, owner_id: int, message: str) -> None:

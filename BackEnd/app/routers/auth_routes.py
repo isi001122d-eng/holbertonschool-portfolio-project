@@ -18,10 +18,11 @@ router = APIRouter(prefix="", tags=["Authentication"])
     summary="Yeni istifadəçi qeydiyyatı",
 )
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    email = user.email.lower()
     existing = (
         db.query(models.User)
         .filter(
-            (models.User.email == user.email)
+            (models.User.email == email)
             | (models.User.username == user.username)
         )
         .first()
@@ -34,7 +35,7 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
     new_user = models.User(
         username=user.username,
-        email=user.email,
+        email=email,
         hashed_password=auth.hash_password(user.password),
     )
     db.add(new_user)
@@ -56,7 +57,7 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
 )
 def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(
-        models.User.email == credentials.email
+        models.User.email == credentials.email.lower()
     ).first()
 
     if not user or not auth.verify_password(

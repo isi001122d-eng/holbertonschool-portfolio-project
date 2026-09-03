@@ -10,6 +10,8 @@ Axın:
 Qeyd: ayrıca "TeamMember" cədvəli yoxdur — status="accepted" olan
 Application sətirləri komanda üzvləri kimi sayılır.
 """
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -17,8 +19,6 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import (
     get_current_user,
-    get_current_user_optional,
-    resolve_actor_id,
     require_ownership,
 )
 from app import models, schemas
@@ -28,7 +28,9 @@ router = APIRouter(tags=["Team Matching"])
 
 def _get_project_or_404(project_id: int, db: Session) -> models.Project:
     project = (
-        db.query(models.Project).filter(models.Project.id == project_id).first()
+        db.query(models.Project)
+        .filter(models.Project.id == project_id, models.Project.is_deleted.is_(False))
+        .first()
     )
     if not project:
         raise HTTPException(
@@ -58,19 +60,10 @@ def apply_to_project(
     project_id: int,
     payload: schemas.ApplicationCreate,
     db: Session = Depends(get_db),
-    token_user: models.User | None = Depends(get_current_user_optional),
+    token_user: models.User = Depends(get_current_user),
 ):
     project = _get_project_or_404(project_id, db)
-    applicant_id = resolve_actor_id(token_user, payload.applicant_id)
-
-    applicant = (
-        db.query(models.User).filter(models.User.id == applicant_id).first()
-    )
-    if not applicant:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="applicant_id-yə uyğun istifadəçi tapılmadı",
-        )
+    applicant_id = token_user.id
 
     if project.owner_id == applicant_id:
         raise HTTPException(
@@ -82,6 +75,12 @@ def apply_to_project(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Bu layihə artıq müraciətləri qəbul etmir",
+        )
+
+    if project.application_deadline is not None and project.application_deadline < date.today():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu layihənin müraciət qəbulu tarixi bitib",
         )
 
     application = models.Application(
@@ -129,8 +128,17 @@ def list_project_applications(
     "/users/{user_id}/applications",
     response_model=list[schemas.ApplicationResponse],
     summary="İstifadəçinin etdiyi bütün müraciətlər",
+    description="Token tələb olunur — yalnız öz müraciətlərinizi görə bilərsiniz.",
 )
-def list_user_applications(user_id: int, db: Session = Depends(get_db)):
+def list_user_applications(
+    user_id: int,
+    db: Session = Depends(get_db),
+    token_user: models.User = Depends(get_current_user),
+):
+    require_ownership(
+        token_user.id, user_id,
+        "Yalnız öz müraciətlərinizi görə bilərsiniz",
+    )
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(

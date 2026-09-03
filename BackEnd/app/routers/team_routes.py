@@ -20,7 +20,11 @@ router = APIRouter(prefix="/projects/{project_id}/team", tags=["Collaboration Da
 
 
 def _get_project_or_404(project_id: int, db: Session) -> models.Project:
-    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    project = (
+        db.query(models.Project)
+        .filter(models.Project.id == project_id, models.Project.is_deleted.is_(False))
+        .first()
+    )
     if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Layihə tapılmadı"
